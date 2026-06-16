@@ -22,20 +22,27 @@ describe('offlineQueue', () => {
     expect(queue[0].eventId).toBe(101);
   });
 
-  it('limits queue to 15 items and returns false when full', async () => {
+  it('limits queue to 15 items and evicts oldest when full', async () => {
     // Fill the queue with 15 items
     for (let i = 0; i < 15; i++) {
       const success = await pushToQueue({ eventId: i, payload: {} });
       expect(success).toBe(true);
     }
 
-    // Attempting to push 16th item should fail and return false
-    const success16 = await pushToQueue({ eventId: 16, payload: {} });
-    expect(success16).toBe(false);
-
-    // Verify queue length remains 15
-    const queue = getQueue();
+    // Verify queue length is 15 and first item is eventId 0
+    let queue = getQueue();
     expect(queue.length).toBe(15);
+    expect(queue[0].eventId).toBe(0);
+
+    // Attempting to push 16th item should evict oldest (eventId 0)
+    const success16 = await pushToQueue({ eventId: 16, payload: {} });
+    expect(success16).toBe(true);
+
+    // Verify queue length remains 15 and first item is now eventId 1
+    queue = getQueue();
+    expect(queue.length).toBe(15);
+    expect(queue[0].eventId).toBe(1);
+    expect(queue[14].eventId).toBe(16);
   });
 
   it('clears queue successfully', async () => {

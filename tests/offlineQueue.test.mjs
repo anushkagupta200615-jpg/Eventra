@@ -196,13 +196,17 @@ global.localStorage.setItem(
 );
 assert.equal(getQueue().length, 15, "storage pre-filled to 15 items");
 
-// Attempt to push a 16th item — should be silently dropped
+// Attempt to push a 16th item — should evict the oldest item
 const result = await pushToQueue({ eventId: "overflow" });
-assert.equal(result, false, "pushToQueue() returns false when queue is full");
+assert.equal(result, true, "pushToQueue() returns true and evicts oldest when queue is full");
 assert.equal(getQueue().length, 15, "queue length stays at 15 after overflow push");
 assert.ok(
-  !getQueue().some((x) => x.eventId === "overflow"),
-  "overflow item is NOT stored"
+  getQueue().some((x) => x.eventId === "overflow"),
+  "overflow item IS stored"
+);
+assert.ok(
+  !getQueue().some((x) => x.eventId === "e0"),
+  "oldest item (e0) is evicted"
 );
 
 // ── setQueue ────────────────────────────────────────────────────────────────

@@ -67,8 +67,18 @@ const DB_VERSION = 2;
 // ---------------------------------------------------------------------------
 const _rescueFromLocalStorage = () => {
   try {
-          const raw = localStorage.getItem(QUEUE_KEY);
-          return safeJsonParse(raw, []);
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return [];
+    
+    // Enforce an absolute byte-size ceiling before parsing
+    const MAX_QUEUE_BYTES = 2 * 1024 * 1024; // 2MB limit
+    if (raw.length > MAX_QUEUE_BYTES) {
+      logger.error("[OfflineQueue] Local storage string exceeded absolute byte-size ceiling. Dropping entire queue.");
+      localStorage.removeItem(QUEUE_KEY);
+      return [];
+    }
+    
+    return safeJsonParse(raw, []);
   } catch {
     return [];
   }
@@ -177,6 +187,16 @@ const openDB = () => {
 export const getQueue = () => {
   try {
     const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return [];
+    
+    // Enforce an absolute byte-size ceiling before parsing
+    const MAX_QUEUE_BYTES = 2 * 1024 * 1024; // 2MB absolute limit
+    if (raw.length > MAX_QUEUE_BYTES) {
+      logger.error("[OfflineQueue] Offline queue exceeded absolute byte-size ceiling. Dropping entire queue to prevent memory explosion.");
+      localStorage.removeItem(QUEUE_KEY);
+      return [];
+    }
+
     return safeJsonParse(raw, []);
   } catch (error) {
     logger.error("[OfflineQueue] Failed to parse offline queue:", error);
@@ -315,9 +335,10 @@ export const pushToQueue = async (item, userId = null) => {
 
   // 1. Sync mirror updates immediately (Synchronous fallback)
   const queue = getQueue();
-  if (queue.length >= offlineSyncConfig.maxQueueSize) {
-    logger.warn("Offline queue limit reached. Dropping item to prevent local overflow.");
-    return false;
+  // Strict eviction policy: evict oldest items if limit reached instead of dropping new
+  while (queue.length >= offlineSyncConfig.maxQueueSize) {
+    queue.shift();
+    logger.warn("Offline queue limit reached. Evicting oldest item.");
   }
   const isDuplicate = queue.some((existing) => {
   if (actionItem.idempotencyKey && existing.idempotencyKey) {
